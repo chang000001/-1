@@ -10,3 +10,5 @@
 
 在异步通讯中不使用时钟信号进行数据同步，它们直接在数据信号中穿插一些同步用的信号位，
 或者把主体数据进行打包，以数据帧的格式传输数据
+
+![image](https://github.com/user-attachments/assets/62eefaba-5c8a-45c1-8090-95b23d14b873)
