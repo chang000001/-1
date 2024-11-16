@@ -217,10 +217,37 @@ USB 转串口硬件设计
 简单易用，但效率低下，尤其是在需要发送大量数据或多任务处理的系统中。
 
 
+串口中断函数
+HAL_UART_Receive_IT
+解析
+1. 函数简介
+HAL_UART_Receive_IT 是 STM32 HAL 库中实现的一种 非阻塞接收函数，通过中断模式接收指定数量的数据。
+
+2. 函数功能
+函数用于启动 UART 的数据接收过程，同时不会阻塞 CPU。
+接收过程依赖 UART 的接收中断（RXNE 中断）来逐字节处理数据，直到完成所有接收任务。
+当数据接收完成或发生错误时，相关回调函数（如 HAL_UART_RxCpltCallback）会被触发。
+3. 参数说明
+huart: 指向 UART_HandleTypeDef 类型的结构体，包含了 UART 的硬件配置和状态信息。
+pData: 指向接收数据存储缓冲区的指针。
+Size: 指定要接收的数据量（以字节或 16 位单位为数据单元）。
 
 
+unsigned char data[5];
 
+HAL_UART_Receive_IT(&huart1,data,5);
 
+接收5个数据后，触发接收中断
+
+要实现连续接收数据后触发中断，仅需在中断函数中
+再次调用HAL_UART_Receive_IT即可。
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	
+    HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
+	  HAL_UART_Receive_IT(&huart1,data,5);
+}
 
 
 
