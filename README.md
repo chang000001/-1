@@ -1030,7 +1030,7 @@ STM32配置中的实际说明
 
 ADC在开始精确转换前需要一个稳定时间tSTAB。在开始ADC转换和14个时钟周期后，EOC标志被设置，16位ADC数据寄存器包含转换的结果。
 
-从图中能看出，第一次ACON置位，是唤醒ADC，给其上电，第二次置位，则开始让ADC工作。
+从图中能看出，第一次ACON置位，是唤醒ADC，给其上电，第二次置位，则开始让ADC工作。(这个图可能有点问题)
 
 模拟看门狗
 
@@ -1096,8 +1096,491 @@ ADC在开始精确转换前需要一个稳定时间tSTAB。在开始ADC转换和
 
 ![image](https://github.com/user-attachments/assets/ef714353-f2db-4c8e-a297-119fd739fca4)
 
+间断模式
+
+	规则组
+	
+		此模式通过设置ADC_CR1寄存器上的DISCEN位激活。
+		
+		它可以用来执行一个短序列的n次转换(n<=8)，此转换是ADC_SQRx(序列寄存器:可以用来配置通道的个数和要使用哪个通道)寄存器所选择的转换序列的一部分
+		
+		数值n由ADC_CR1寄存器的DISCNUM[2:0]位给出
+		
+		一个外部触发信号可以启动ADC_SQRx寄存器中描述的下一轮n次转换，直到此序列所有的转
+		换完成为止。总的序列长度由ADC_SQR1寄存器的L[3:0]定
+		
+		举例：
+		
+		n=3，被转换的通道 = 0、1、2、3、6、7、9、10 
+		
+		第一次触发：转换的序列为 0、1、2 
+		
+		第二次触发：转换的序列为 3、6、7 
+		
+		第三次触发：转换的序列为 9、10，并产生EOC事件
+		
+		第四次触发：转换的序列 0、1、2
+		
+		当以间断模式转换一个规则组时，转换序列结束后不自动从头开始。
+		当所有子组被转换完成，下一次触发启动第一个子组的转换。在上面的例子中，第四次触发重
+		新转换第一子组的通道 0、1和2。
+
+	注入组
+		此模式通过设置ADC_CR1寄存器的JDISCEN位激活。在一个外部触发事件后，该模式按通道顺序逐个转换ADC_JSQR寄存器中选择的序列。
+
+		  一个外部触发信号可以启动ADC_JSQR寄存器选择的下一个通道序列的转换，直到序列中所有
+		的转换完成为止。总的序列长度由ADC_JSQR寄存器的JL[1:0]位定义。
+
+		例子：
+  
+		n=1，被转换的通道 = 1、2、3 
+  
+		第一次触发：通道1被转换
+  
+		第二次触发：通道2被转换
+  
+		第三次触发：通道3被转换，并且产生EOC和JEOC事件
+  
+		第四次触发：通道1被转换
+
+	1 当完成所有注入通道转换，下个触发启动第1个注入通道的转换。在上述例子中，第四个
+	触发重新转换第1个注入通道1。
+ 
+	2 不能同时使用自动注入和间断模式
+ 
+	3 必须避免同时为规则和注入组设置间断模式。间断模式只能作用于一组转换。
 
 
+校准
+
+	ADC有一个内置自校准模式。校准可大幅减小因内部电容器组的变化而造成的准精度误差。在
+	校准期间，在每个电容器上都会计算出一个误差修正码(数字值)，这个码用于消除在随后的转换
+	中每个电容器上产生的误差。
+	
+	通过设置ADC_CR2寄存器的CAL位启动校准。一旦校准结束，CAL位被硬件复位，可以开始正
+	常转换
+	
+	建议在上电时执行一次ADC校准。校准阶段结束后，校准码储存在ADC_DR中。
+
+1 建议在每次上电后执行一次校准。
+
+2 启动校准前，ADC必须处于关电状态(ADON=’0’)超过至少两个ADC时钟周期。
+
+
+ ![image](https://github.com/user-attachments/assets/216bd600-039a-4b8e-8a66-0d9aeb83f6b9)
+
+数据对齐
+
+ADC_CR2寄存器中的ALIGN位选择转换后数据储存的对齐方式。
+
+数据可以左对齐或右对齐，
+
+
+![image](https://github.com/user-attachments/assets/7f698019-3db6-4127-b834-10530333c327)
+
+
+![image](https://github.com/user-attachments/assets/36bfe2f3-ea52-43d4-af66-ad43de34fa06)
+
+可编程的通道采样时间
+
+ADC使用若干个ADC_CLK周期对输入电压采样，采样周期数目可以通过ADC_SMPR1和
+ADC_SMPR2寄存器中的SMP[2:0]位更改
+
+每个通道可以分别用不同的时间采样。
+
+
+![image](https://github.com/user-attachments/assets/2fe1c30e-4fb4-4742-8d82-64032321b3fb)
+
+
+![image](https://github.com/user-attachments/assets/a4a2eb34-d5bd-4277-b135-12fec3a780e6)
+
+外部触发转换
+
+转换可以由外部事件触发(例如定时器捕获，EXTI线)
+
+如果设置了EXTTRIG控制位，则外部事件就能够触发转换。EXTSEL[2:0]和JEXTSEL2:0]控制位允许应用程序选择8个可能的事件中的
+某一个，可以触发规则和注入组的采样
+
+当外部触发信号被选为ADC规则或注入转换时，只有它的上升沿可以启动转换。
+
+
+![image](https://github.com/user-attachments/assets/a798c012-7867-43cb-8093-866b355e0ddb)
+
+
+![image](https://github.com/user-attachments/assets/cdf7eedd-363d-4555-97d5-cdfc744197d0)
+
+
+![image](https://github.com/user-attachments/assets/5b9e5aa1-1d36-4996-a774-6c2a336828da)
+
+
+![image](https://github.com/user-attachments/assets/4afd890f-261a-44c8-a498-d413c00f7703)
+
+DMA请求
+
+	因为规则通道转换的值储存在一个仅有的数据寄存器中，所以当转换多个规则通道时需要使用
+	DMA，这可以避免丢失已经存储在ADC_DR寄存器中的数据。
+	
+	只有在规则通道的转换结束时才产生DMA请求，并将转换的数据从ADC_DR寄存器传输到用户
+	指定的目的地址
+	
+	只有ADC1和ADC3拥有DMA功能。由ADC2转化的数据可以通过双ADC模式，利用ADC1的
+	DMA功能传输。
+
+双ADC模式
+
+在有2个或以上ADC模块的产品中，可以使用双ADC模式
+
+在双ADC模式里，根据ADC1_CR1寄存器中DUALMOD[2:0]位所选的模式，转换的启动可以是
+ADC1主和ADC2从的交替触发或同步触发
+
+在双ADC模式里，当转换配置成由外部事件触发时，用户必须将其设置成仅触发主ADC，从
+ADC设置成软件触发，这样可以防止意外的触发从转换。但是，主和从ADC的外部触发必须同
+时被激活
+
+共有6种可能的模式：
+
+─ 同步注入模式
+
+─ 同步规则模式
+
+─ 快速交叉模式
+
+─ 慢速交叉模式
+
+─ 交替触发模式
+
+─ 独立模式
+
+还有可以用下列方式组合使用上面的模式：
+
+─ 同步注入模式 + 同步规则模式
+
+─ 同步规则模式 + 交替触发模式
+
+─ 同步注入模式 + 交叉模式
+
+在双ADC模式里，为了在主数据寄存器上读取从转换数据，必须使能DMA位，即使不使用DMA
+传输规则通道数据
+
+。。。。。
+
+温度传感器
+
+温度传感器在内部和ADC1_IN16输入通道相连接，此通道把传感器输出的电压转换成数字值。
+温度传感器模拟输入推荐采样时间是17.1μs。
+
+当没有被使用时，传感器可以置于关电模式。
+
+必须设置TSVREFE位激活内部通道：ADC1_IN16(温度传感器)和ADC1_IN17(VREFINT)的转换。
+
+
+![image](https://github.com/user-attachments/assets/d6b80c47-2096-4757-aa92-e48fce971b05)
+
+内部温度传感器更适合于检测温度的变化，而不是测量绝对的温度。如果需要测量精确的温
+度，应该使用一个外置的温度传感器。
+
+
+ADC中断
+
+	规则和注入组转换结束时能产生中断，当模拟看门狗状态位被设置时也能产生中断。它们都有
+	独立的中断使能位
+	
+	ADC1和ADC2的中断映射在同一个中断向量上，而ADC3的中断有自己的中断向量。
+	ADC_SR寄存器中有2个其他标志，但是它们没有相关联的中断：
+	
+	● JSTRT(注入组通道转换的启动) 
+	● STRT(规则组通道转换的启动)
+	
+	
+	![image](https://github.com/user-attachments/assets/aa5b324f-3d85-4aa5-9efc-4ea4597d0cd6)
+
+四位逐次逼近ADC实现原理
+
+![image](https://github.com/user-attachments/assets/bb1bc246-cd71-439a-873b-4c0cdfec5ec4)
+
+开关闭合，外部电压对电容充电，
+
+![image](https://github.com/user-attachments/assets/c36ebbce-123a-4005-9076-19ac3e57076f)
+
+电容充满后，断开开关，此时电容电压稳定在外部电压水平，
+
+
+![image](https://github.com/user-attachments/assets/dd0998c2-4bb0-4abb-82b6-90993ae17ad5)
+
+输入电压范围为0-3.3V，4位ADC，代表2的4次方，共16个状态，每一个单独的状态的电压值为3.3/16约为0.21V
+此时输入2.1v，在结果寄存器处，先从最大一位b3开始比较，即1000，经过电压发生器（DAC将数字信号转为模拟电压信号，）用于和比较器的正向输入端作比较。
+
+1000是1.76v,比2.1v小，所以在b2位放1，为1100，为2.64V，大了，所以须将b2位置0，然后置b1为1。。。。，这样依次比较，最终得到1010
+
+推导ADC的采样框图
+
+开关很重要，采样开关
+
+![image](https://github.com/user-attachments/assets/39884142-3eb0-429f-a42a-09c3ab4c3981)
+
+将内部结构替换为框图
+
+![image](https://github.com/user-attachments/assets/af74473c-3ac5-4c93-be71-2ff8f6dbec57)
+
+逐次逼近的12位ADC
+
+![image](https://github.com/user-attachments/assets/4d74973e-fc29-4869-a356-08f804064934)
+
+ADC整体采集流程
+
+![image](https://github.com/user-attachments/assets/23a7a4d4-30cd-4c9c-b558-4cbe6b7d693b)
+
+假设有多路信号需要被ADC通道采集，此时应该怎么办，下面的结果，使用了太多的ADC采集和结果寄存器
+
+![image](https://github.com/user-attachments/assets/18c84e48-bfa5-495c-bec0-faf8a2d73c5d)
+
+采取下面的方式，ADC只有1个，结果寄存器只有1个，但采样开关多个
+
+![image](https://github.com/user-attachments/assets/f7d637ae-3035-4d46-a91a-4fbe47bec107)
+
+使用流程如下，先闭合第一个采样开关，让一路模拟信号对电容充电，充电完成后，断开开关，使用ADC将模拟信号转为12位数字信号，再生成新的信模拟信号，通过比较器
+与输入的模拟信号做对比，直到得到逼近后的数字信号结果，存入结果寄存器，读出结果。
+
+![image](https://github.com/user-attachments/assets/e97a0c89-9230-471d-b2a3-a4312e6f9a52)
+
+重复此过程，转换多路信号
+
+![image](https://github.com/user-attachments/assets/d887ff27-06e8-4bd0-8b7d-eb5a74b57bcd)
+
+103的adc信号来源，一部分可以由外部引脚输入，一部分连接到了芯片内部，用于温度计，参考电压的测量
+
+![image](https://github.com/user-attachments/assets/c34765d8-25c8-4d38-8da2-713b5f0d0f09)
+
+cubemx的ADC通道来源
+
+![image](https://github.com/user-attachments/assets/bc2a3b9f-7249-4fda-96ef-fabfd56d8ba6)
+
+通道与IO引脚的对应可以由cubemx点击查看
+
+![image](https://github.com/user-attachments/assets/b810df67-7103-423a-ac65-2ff8ce66af68)
+
+输入源有12路，需要进行管理，分两部分进行管理，分别是外部触发（注入通道）和外部触发（规则通道），通过外部触发信号来启动
+
+![image](https://github.com/user-attachments/assets/701e7737-1eb0-48f1-93e2-d4f98ee04341)
+
+假如打算按照启动IN1、IN2、IN3的计划来启动ADC采集
+
+![image](https://github.com/user-attachments/assets/3e817e26-7bb6-4375-92d6-511ccd9bfb3c)
+
+可以有两种方式进行，一个是常规序列，一个是注入序列
+
+![image](https://github.com/user-attachments/assets/47b17545-0396-4e28-a581-34ce6b1d2c6b)
+
+两个序列的使用方式是一致的，以常规序列为例
+
+![image](https://github.com/user-attachments/assets/2980e614-62ce-44d3-9782-2938ab22b4a9)
+
+只需向外部触发输出一个脉冲信号，便可以按计划执行
+
+![image](https://github.com/user-attachments/assets/a0ba2535-1fd3-4474-bd16-7f34b6cf8ca7)
+
+每次输出脉冲信号都会执行一次ADC采集
+
+![image](https://github.com/user-attachments/assets/25a50cc0-7c1e-4d04-b5b1-7784a56287b2)
+
+举例说明，1ms采集一次外部正弦波信号，在通道5实现，步骤如下：计划表里写执行通道5，然后每1ms发送一次脉冲信号
+
+![image](https://github.com/user-attachments/assets/a6eb36fc-3a01-4bac-a69f-f1585bf6730b)
+
+转换结果如下
+
+![image](https://github.com/user-attachments/assets/2797c96e-2ca0-4e6b-b551-7ab3a7da1346)
+
+
+采样时间和转换时间
+
+	放重物=采样时间=给电容充电时间，调整砝码时间=转换时间=依次按位输出模拟信号与电容上的模拟信号时间
+	
+	![image](https://github.com/user-attachments/assets/941d378f-756b-487f-a6c2-7e629399a2e3)
+	
+	ADC的时钟，先看STM32的内部框图，
+	
+	![image](https://github.com/user-attachments/assets/f0cc7b17-0b57-4d05-8ad4-b85eaa1e872e)
+	
+	ADC挂载在APB2总线上
+	
+	![image](https://github.com/user-attachments/assets/a9d82ed3-87f7-4da0-96a8-dcccf41add39)
+	
+	时钟树分析，APB2产生的PCLK时钟，经过分频最终进入到ADC，而且f103的ADC时钟最大不超过14M，这是由内部电容特性决定
+	
+	![image](https://github.com/user-attachments/assets/5808a9bb-6dbf-40d3-b6b4-411f70f4a783)
+	
+	介绍时钟的原因，是因为采样时间和转换时间都要表示位时钟频率的倍数。假如ADC时钟频率配置为14MHZ,那么时钟周期就是1/14us
+	
+	![image](https://github.com/user-attachments/assets/82a97e72-a2d0-4431-b3d8-38e4029dd2bb)
+	
+	假如采样时间0.1us，一般写为时钟周期的倍数，即可近似为1.5*1/14 cycle，即1.5cycle,方便后续编程
+	
+	![image](https://github.com/user-attachments/assets/bb01adbf-fea7-44bf-a326-ef3b23a95808)
+
+转换时间的计算方法
+
+	每次尝试都需要消耗一个时钟周期，12位的要尝试12次，也就是12个时钟周期。
+	
+	![image](https://github.com/user-attachments/assets/ef0f404a-9c80-4289-95d5-31f5e8b83a02)
+	
+	总共是12+0.5个时钟周期，这个0.5暂时不清楚作用
+	
+	![image](https://github.com/user-attachments/assets/bc4b81c4-474b-400f-a1e7-e01f33b4ae9c)
+
+采样时间计算方法
+
+就是外部模拟信号给电容充电的时间=采样开关闭合的时间
+	
+![image](https://github.com/user-attachments/assets/7a01ec4e-e3f1-4b32-84fe-56975d86865a)
+
+![image](https://github.com/user-attachments/assets/afef1234-713d-405d-8575-d61b0a1b50a7)
+
+存在误差，采样时越长，误差越小，需要在精度何效率之间做取舍
+
+![image](https://github.com/user-attachments/assets/cf8b801d-7c2b-42ed-bb84-a963c008906a)
+
+ADC是有精度误差的，即分辨率，就是单个最低位代表的电压值，ADC的最大精度误差，需要满足采样误差小于四分之一的ADC分辨率
+
+ADC分辨率就是能够表示出的最小电压值，比如12位ADC，0-3.3v,分辨率就是 0.8mv，四分之一就是0.2mv,
+
+采样误差，是指采集的信号与真实的信号有误差，比如实际信号2.1v=2100mv，
+
+即，2.1v的表示1010，1010转模拟信号与实际信号是有误差的，要满足采集到的信号需要满足误差小于四分之一ADC分辨率
+
+![image](https://github.com/user-attachments/assets/b0acdbc6-214e-4186-8daf-a557be196262)
+
+
+![image](https://github.com/user-attachments/assets/4070dd91-e2a6-476c-a6a9-d977254a7cbf)
+
+芯片手册关于采样时间的公式
+
+![image](https://github.com/user-attachments/assets/c9f9d60c-bded-4d2a-afca-5af0c56ed55e)
+
+Rin是信号源内阻，当Radc和电容确定以后，采样时间只和信号源的内阻有关，
+
+![image](https://github.com/user-attachments/assets/7cc7746c-5a27-429f-9b3e-e793c767911b)
+
+电阻是电路设计的，电容可以查找手册知道
+
+![image](https://github.com/user-attachments/assets/7efb00a4-8b08-4252-86b2-d83f52cbed34)
+
+
+
+采样误差与信号源内阻有关系，怎么能知道信号源的内阻
+
+![image](https://github.com/user-attachments/assets/d2838e37-65cf-4822-ab22-d98916796d62)
+
+以信号源的多种内阻举例
+
+![image](https://github.com/user-attachments/assets/3b837fe9-42e8-4a07-b60a-3eaff0651b22)
+
+要表示为时钟周期，除以14，也就是乘以1/14，即f
+
+![image](https://github.com/user-attachments/assets/18822238-a81a-473d-b708-397f95ac74e4)
+
+
+单片机中ADC的采样时间是固定的，有固定的挡位，使用时需要从给的挡位中选择。
+
+![image](https://github.com/user-attachments/assets/ce096c78-900c-4c15-b6ae-658a8c3e8439)
+
+![image](https://github.com/user-attachments/assets/db18360a-7df9-4ba5-97a0-f835995e7e98)
+
+根据信号源内阻不同选择采样时间的挡位
+
+![image](https://github.com/user-attachments/assets/3b07963c-a07c-4774-88aa-0be0e265fe0f)
+
+在理想情况下，1秒内ADC可以实现多少次转换
+
+解答，1次转换时间 = 采集时间 + 转换时间，转换时间是固定的，12.5个时钟周期，假设f=14M,理想电源内阻为0欧，
+
+![image](https://github.com/user-attachments/assets/ea7e2526-ebd4-4f7b-86b1-5db06e42bb50)
+
+根据公式可以算算出实际采样时间，约为1个时钟周期，在8个挡位中选取最接近的1.5个时钟周期
+
+![image](https://github.com/user-attachments/assets/2e1f0122-e11b-4c50-b06b-ed1101ae7a4f)
+
+所以，最终的结果就是12.5+1.5=14个时钟周期
+
+![image](https://github.com/user-attachments/assets/fbfbec89-9677-483c-accb-cd70fabfd04a)
+
+总共用时约为一次ADC转换需要1us，
+
+![image](https://github.com/user-attachments/assets/18439d7c-5bf8-4427-b1d1-e94a2f2b07ae)
+
+1秒就是1百万次。
+
+![image](https://github.com/user-attachments/assets/9dcae552-406f-4c15-b394-247d0293319a)
+
+
+
+
+
+
+
+		ADC一次注入通道的信号采集能实现什么功能
+		
+			ADC一次注入通道的信号采集主要用于在特殊情况下的模拟信号采集，其功能和应用场景包括以下几个方面
+		 
+			 1. 精确采样特定信号
+		  
+				注入通道可以在规则通道转换过程中中断，并优先完成注入通道的采样。
+				功能：
+				
+					实现对关键信号（如高优先级信号）的实时采样。
+					在规则通道采样被占用的情况下，插入采样其他重要信号。
+					应用：
+					
+					实时监测系统的关键参数，例如工业控制中需要监测电流、电压等紧急信号。
+		
+			2. 支持外部触发的精确定时采样
+			注入通道可以通过外部触发信号启动采样，与系统外部事件同步。
+			功能：
+			
+				实现特定时序的信号采样，避免信号采集的时间抖动。
+				提高 ADC 数据与系统状态之间的同步性。
+				应用：
+				
+				电机控制：根据 PWM 周期采样电流或位置反馈信号。
+		  
+				医疗设备：同步采集心电信号等生物电信号。
+		   
+			3. 灵活的通道切换
+			注入通道采样配置与规则通道独立，可以动态选择采样的信号源。
+			功能：
+			
+				在不影响主采样任务的前提下，快速切换采集目标。
+				便于调试或采样过程中动态调整采集的信号。
+				应用：
+				
+				自动化测试中动态采集不同的传感器信号。
+				电力监测中根据故障诊断结果，临时采集指定信号
+		
+		  4. 优化系统性能
+			通过注入通道采样，可以减少规则通道的中断次数，并避免额外的 CPU 负担。
+			功能：
+			
+				提升规则通道的稳定性和效率。
+				确保紧急信号不因规则通道的任务而延迟。
+				应用：
+				
+				飞行控制器等对时间敏感的系统中，采集快速变化的关键信号。
+				汽车电子中实时采样关键参数（如油门位置传感器）。
+			5. 专用信号优先采集
+			注入通道专门用于特定场景的高优先级信号，和规则通道不共享结果寄存器。
+			功能：
+			
+				避免关键数据与普通数据混淆。
+				提供专门的结果寄存器，提高数据处理效率。
+				应用：
+				
+				电池管理系统中，实时监测电池的温度、电流等状态。
+				多传感器系统中采集高优先级传感器信号（如碰撞检测信号）
+
+
+
+
+ 
 
 
 ADC 简介
